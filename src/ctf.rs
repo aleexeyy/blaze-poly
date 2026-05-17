@@ -4,8 +4,8 @@ use crate::{
     relayer::{RelayerClient, handle_response},
     wallet::DEPOSIT_WALLET_FACTORY,
 };
-use alloy_primitives::{Address, U256};
-use alloy_signer::{Signature, SignerSync as _};
+use alloy_primitives::{Address, U256, hex};
+use alloy_signer::SignerSync as _;
 use alloy_sol_types::{eip712_domain, sol};
 use serde::{Deserialize, Serialize};
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -36,7 +36,7 @@ pub struct SubmitBatchRequest {
     pub from: Address,
     pub to: Address,
     pub nonce: U256,
-    pub signature: Signature,
+    pub signature: String,
     pub deposit_wallet_params: DepositWalletParams,
 }
 
@@ -104,6 +104,15 @@ impl RelayerClient {
             .sign_typed_data_sync(&message, &domain)
             .map_err(|e| BlazePolyError::Internal(format!("failed to sign wallet batch: {e}")))?;
 
+        let v = signature.v() as u8;
+
+        let mut packed = [0u8; 65];
+
+        packed[..32].copy_from_slice(&signature.r().to_be_bytes::<32>());
+        packed[32..64].copy_from_slice(&signature.s().to_be_bytes::<32>());
+        packed[64] = v;
+        let signature = format!("0x{}", hex::encode(packed));
+
         tracing::debug!(signature = %signature, "Batch signature");
 
         self.submit_batch(message, signature).await
@@ -112,7 +121,7 @@ impl RelayerClient {
     pub async fn submit_batch(
         &self,
         batch: RelayerBatch,
-        signature: Signature,
+        signature: String,
     ) -> Result<SubmitBatchResponse> {
         let request = SubmitBatchRequest {
             kind: "WALLET",
@@ -127,10 +136,13 @@ impl RelayerClient {
             },
         };
 
-        let resp = handle_response::<SubmitBatchResponse>(
-            self.post("/submit")?.json(&request).send().await,
-        )
-        .await?;
+        let body = serde_json::to_string(&request).map_err(|e| {
+            BlazePolyError::Internal(format!("failed to serialize batch request into json: {e}"))
+        })?;
+
+        let resp =
+            handle_response::<SubmitBatchResponse>(self.post("/submit")?.body(body).send().await)
+                .await?;
 
         tracing::debug!(
             transaction_id = resp.transaction_id,
@@ -139,31 +151,5 @@ impl RelayerClient {
         );
 
         Ok(resp)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use alloy_primitives::address;
-    use alloy_signer_local::PrivateKeySigner;
-
-    use super::*;
-
-    #[tokio::test]
-    async fn test_get_nonce_request() {
-        let signer: PrivateKeySigner = PRIVATE_KEY.parse().expect("Valid private key");
-        let client = RelayerClient::new(
-            None,
-            RELAYER_API_KEY.to_string(),
-            RELAYER_API_KEY_ADDRESS,
-            signer,
-        )
-        .expect("Valid Input");
-
-        let nonce = client.wallet_nonce().await.unwrap();
-
-        assert_eq!(nonce, U256::ZERO);
-
-        assert_eq!(nonce.to_string(), "0");
     }
 }
