@@ -1,0 +1,55 @@
+[package]
+name = "blaze-poly"
+version = "0.1.3"
+edition = "2024"
+authors = ["Oleksii Radchenko"]
+description = "Polymarket Relayer Client For Personal Use."
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+keywords = ["polymarket", "clob", "trading", "prediction-market", "crypto"]
+categories = ["api-bindings", "network-programming"]
+documentation = "https://docs.rs/blaze_poly"
+homepage = "https://github.com/aleexeyy/blaze-poly"
+repository = "https://github.com/aleexeyy/blaze-poly"
+
+[dependencies]
+# Crypto
+alloy-primitives = "1"
+alloy-sol-types = { version = "1" }
+alloy-contract = "1"
+alloy-provider = "1"
+alloy-signer = { version = "1" }
+alloy-signer-local = { version = "1", features = ["eip712"] }
+thiserror = "1"
+
+# Async
+tokio = { version = "1.0", features = ["macros", "rt-multi-thread"] }
+reqwest = { version = "0.13", features = ["json"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+
+[profile.dev]
+opt-level = 1
+
+
+[lints.rust]
+unsafe_code = "deny"
+
+[lints.clippy]
+correctness = "deny"
+suspicious = "deny"
+perf = "warn"
+style = "warn"
+complexity = "warn"
+nursery = "warn"
+cargo = "warn"
